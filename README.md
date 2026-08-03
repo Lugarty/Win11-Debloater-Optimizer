@@ -35,7 +35,7 @@
 
 ### Opção 2: Compilar do código-fonte
 1. Clone o repositório
-"git clone https://github.com/lugarty/Win11Debloater.git" e depois
+"git clone https://github.com/Lugarty/Win11-Debloater-Optimizer" e depois
 "cd Win11Debloater"
 
 2. Execute em modo desenvolvimento
