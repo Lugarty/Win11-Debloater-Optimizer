@@ -1,0 +1,2 @@
+C:\Apps\VS Code\Win11Debloater\bin\Release\net8.0-windows\win-x64\publish\Win11Debloater.pdb
+C:\Apps\VS Code\Win11Debloater\bin\Release\net8.0-windows\win-x64\publish\Win11Debloater.exe

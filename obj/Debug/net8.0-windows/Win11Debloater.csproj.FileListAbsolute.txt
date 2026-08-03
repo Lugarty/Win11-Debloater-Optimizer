@@ -12,3 +12,4 @@ C:\Apps\VS Code\Win11Debloater\obj\Debug\net8.0-windows\refint\Win11Debloater.dl
 C:\Apps\VS Code\Win11Debloater\obj\Debug\net8.0-windows\Win11Debloater.pdb
 C:\Apps\VS Code\Win11Debloater\obj\Debug\net8.0-windows\Win11Debloater.genruntimeconfig.cache
 C:\Apps\VS Code\Win11Debloater\obj\Debug\net8.0-windows\ref\Win11Debloater.dll
+C:\Apps\VS Code\Win11Debloater\obj\Debug\net8.0-windows\Win11Debloater.sourcelink.json

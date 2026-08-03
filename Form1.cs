@@ -260,6 +260,21 @@ function Remove-AppxByName
 
         _tasks.Add(new OtimizacaoTask
         {
+            Nome = "Limpar Updates Antigos",
+            Descricao = "Remove componentes substituídos do Windows Update.",
+            Tempo = "5–20 min",
+            Acao = LimparUpdatesAntigos,
+            ExcludeFromQuick = true,
+            RequiresConfirmation = true,
+            ConfirmationMessage =
+                "Esta etapa faz uma limpeza profunda de componentes do Windows Update.\n\n" +
+                "Ela usa DISM StartComponentCleanup e ResetBase.\n" +
+                "O ResetBase pode impedir a desinstalação de atualizações antigas.\n\n" +
+                "Deseja realmente continuar?"
+        });
+
+        _tasks.Add(new OtimizacaoTask
+        {
             Nome = "Reparo de Sistema",
             Descricao = "DISM + SFC: verifica e repara arquivos do Windows.",
             Tempo = "10–30 min",
@@ -358,20 +373,10 @@ function Remove-AppxByName
     {
         if (_executando) return;
 
-        if (t.RequiresConfirmation && !string.IsNullOrWhiteSpace(t.ConfirmationMessage))
+        if (!ConfirmarTarefaPerigosa(t))
         {
-            var confirm = MessageBox.Show(
-                t.ConfirmationMessage,
-                $"Confirmar: {t.Nome}",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning,
-                MessageBoxDefaultButton.Button2);
-
-            if (confirm != DialogResult.Yes)
-            {
-                Log($"Operação cancelada pelo usuário: {t.Nome}.", Color.FromArgb(150, 150, 150));
-                return;
-            }
+            Log($"Operação cancelada pelo usuário: {t.Nome}.", Color.FromArgb(150, 150, 150));
+            return;
         }
 
         _executando = true;
@@ -439,9 +444,18 @@ function Remove-AppxByName
 
             foreach (var t in selected)
             {
-                await ExecutarTaskInterno(t);
-                i++;
+                if (!ConfirmarTarefaPerigosa(t))
+                {
+                    i++;
+                    progressBar.Value = i;
+                    Log($"Etapa ignorada pelo usuário: {t.Nome}.", Color.FromArgb(255, 190, 90));
+                    lblStatus.Text = $"Etapa {i} de {selected.Count} processada.";
+                    continue;
+                }
 
+                await ExecutarTaskInterno(t);
+
+                i++;
                 progressBar.Value = i;
                 lblStatus.Text = $"Etapa {i} de {selected.Count} concluída.";
                 await Task.Delay(250);
@@ -463,6 +477,21 @@ function Remove-AppxByName
         }
     }
 
+    private bool ConfirmarTarefaPerigosa(OtimizacaoTask t)
+    {
+        if (!t.RequiresConfirmation || string.IsNullOrWhiteSpace(t.ConfirmationMessage))
+            return true;
+
+        var result = MessageBox.Show(
+            t.ConfirmationMessage,
+            $"Confirmar: {t.Nome}",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+
+        return result == DialogResult.Yes;
+    }
+
     private bool ConfirmarPacote(bool includeRepair)
     {
         var sb = new StringBuilder();
@@ -482,13 +511,16 @@ function Remove-AppxByName
 
         if (includeRepair)
         {
-            sb.AppendLine("11. Executará DISM + SFC. Essa etapa pode levar de 10 a 30 minutos.");
+            sb.AppendLine("11. Executará limpeza profunda de atualizações antigas (DISM StartComponentCleanup/ResetBase).");
+            sb.AppendLine("12. Executará DISM + SFC. Essa etapa pode levar de 10 a 30 minutos.");
         }
         else
         {
-            sb.AppendLine("11. NÃO executará DISM/SFC. Esta é a opção rápida.");
+            sb.AppendLine("11. NÃO executará limpeza profunda de atualizações, DISM/SFC. Esta é a opção rápida.");
         }
 
+        sb.AppendLine();
+        sb.AppendLine("Algumas etapas perigosas pedirão confirmação adicional antes de executar.");
         sb.AppendLine();
         sb.AppendLine("Nada essencial será removido: Microsoft Store, Segurança do Windows, Calculadora, Snipping Tool e componentes Xbox/Game Pass permanecem.");
         sb.AppendLine();
@@ -817,6 +849,9 @@ Write-Output "[OK] Desempenho e jogos configurados."
     private Task LimpezaProfunda()
     {
         string cmd = """
+Write-Output "[FILE] Parando serviços do Windows Update, BITS e Entrega Otimizada..."
+Stop-Service -Name wuauserv, bits, DoSvc -Force -ErrorAction SilentlyContinue
+
 Write-Output "[FILE] Limpando Temp do usuário ($env:TEMP)"
 Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -826,19 +861,102 @@ Remove-Item -Path 'C:\Windows\Temp\*' -Recurse -Force -ErrorAction SilentlyConti
 Write-Output "[FILE] Limpando Prefetch (C:\Windows\Prefetch)"
 Remove-Item -Path 'C:\Windows\Prefetch\*' -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Output "[FILE] Limpando downloads antigos do Windows Update"
+Write-Output "[FILE] Limpando downloads do Windows Update"
 Remove-Item -Path 'C:\Windows\SoftwareDistribution\Download\*' -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Output "[FILE] Limpando arquivos de Entrega Otimizada"
 Remove-Item -Path 'C:\Windows\SoftwareDistribution\DeliveryOptimization\*' -Recurse -Force -ErrorAction SilentlyContinue
 
+Write-Output "[FILE] Reiniciando serviços do Windows Update, BITS e Entrega Otimizada..."
+Start-Service -Name wuauserv, bits, DoSvc -ErrorAction SilentlyContinue
+
 Write-Output "[FILE] Esvaziando Lixeira"
 Clear-RecycleBin -Force -Confirm:$false -ErrorAction SilentlyContinue
 
-Write-Output "[OK] Limpeza concluída."
+Write-Output "[OK] Limpeza básica concluída."
 """;
 
         return RunPS(cmd);
+    }
+
+    private async Task LimparUpdatesAntigos()
+    {
+        Log("   Esta limpeza remove componentes substituídos e restos de atualizações antigas.", Color.FromArgb(150, 150, 150));
+        Log("   O ResetBase pode impedir a desinstalação de atualizações antigas.", Color.FromArgb(255, 190, 90));
+
+        await RunPS("""
+Write-Output "[UPDATE] Analisando repositório de componentes (pré-limpeza)..."
+Dism /Online /Cleanup-Image /AnalyzeComponentStore
+
+Write-Output "[UPDATE] Parando serviços do Windows Update, BITS e Entrega Otimizada..."
+Stop-Service -Name wuauserv, bits, DoSvc -Force -ErrorAction SilentlyContinue
+
+Write-Output "[UPDATE] Limpando downloads do Windows Update..."
+Remove-Item -Path 'C:\Windows\SoftwareDistribution\Download\*' -Recurse -Force -ErrorAction SilentlyContinue
+
+Write-Output "[UPDATE] Reiniciando serviços do Windows Update, BITS e Entrega Otimizada..."
+Start-Service -Name wuauserv, bits, DoSvc -ErrorAction SilentlyContinue
+
+Write-Output "[UPDATE] Executando DISM StartComponentCleanup..."
+Dism /Online /Cleanup-Image /StartComponentCleanup /Quiet
+
+if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 3010)
+{
+    Write-Output "[OK] StartComponentCleanup concluído."
+}
+else
+{
+    Write-Output "[AVISO] StartComponentCleanup terminou com código $LASTEXITCODE."
+}
+
+Write-Output "[UPDATE] Executando DISM ResetBase (limpeza profunda)..."
+Dism /Online /Cleanup-Image /StartComponentCleanup /ResetBase /Quiet
+
+if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 3010)
+{
+    Write-Output "[OK] ResetBase concluído."
+}
+else
+{
+    Write-Output "[AVISO] ResetBase terminou com código $LASTEXITCODE."
+}
+
+Write-Output "[CLEAN] Configurando Disk Cleanup para categorias de atualização..."
+
+$categories = @(
+    'Update Cleanup',
+    'Limpeza do Windows Update',
+    'Previous Windows Installation(s)',
+    'Instalações anteriores do Windows',
+    'Temporary Setup Files',
+    'Arquivos de instalação temporários',
+    'Windows Upgrade Log Files',
+    'Arquivos de log de atualização do Windows',
+    'Delivery Optimization Files',
+    'Arquivos de Otimização de Entrega',
+    'Temporary Files',
+    'Arquivos temporários'
+)
+
+foreach ($cat in $categories)
+{
+    $path = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\$cat"
+
+    if (Test-Path $path)
+    {
+        Set-ItemProperty -Path $path -Name 'StateFlags0001' -Value 2 -Type DWord -Force -ErrorAction SilentlyContinue
+        Write-Output "[CLEAN] Categoria habilitada: $cat"
+    }
+}
+
+Write-Output "[CLEAN] Executando Disk Cleanup (pode abrir uma janela de progresso)..."
+Start-Process cleanmgr.exe -ArgumentList '/d C /sagerun:1' -Wait -NoNewWindow -ErrorAction SilentlyContinue
+
+Write-Output "[UPDATE] Analisando repositório de componentes (pós-limpeza)..."
+Dism /Online /Cleanup-Image /AnalyzeComponentStore
+
+Write-Output "[OK] Limpeza de atualizações concluída."
+""");
     }
 
     private async Task ReparoSistema()
@@ -956,6 +1074,8 @@ Write-Output "[OK] SFC concluído."
             cor = Color.FromArgb(210, 210, 150);
         else if (linha.Contains("[ENERGIA]") || linha.Contains("[GAME]"))
             cor = Color.FromArgb(240, 200, 120);
+        else if (linha.Contains("[UPDATE]") || linha.Contains("[CLEAN]"))
+            cor = Color.FromArgb(120, 200, 255);
         else if (linha.Contains("[DISM]") || linha.Contains("[SFC]"))
             cor = Color.FromArgb(120, 200, 255);
         else

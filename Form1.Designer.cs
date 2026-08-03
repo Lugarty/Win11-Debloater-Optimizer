@@ -89,7 +89,7 @@ partial class Form1
         lblAppSub.Margin = new Padding(0, 0, 0, 16);
         lblAppSub.Font = new Font("Segoe UI", 9F);
         lblAppSub.ForeColor = Color.FromArgb(110, 110, 110);
-        lblAppSub.Text = "Ferramentas individuais ou pacote completo.";
+        lblAppSub.Text = "By Lugarty";
 
         panelActions.Dock = DockStyle.Top;
         panelActions.Height = 46;
