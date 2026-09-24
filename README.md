@@ -1,92 +1,186 @@
-# ⚡ Win11 Debloater & Optimizer
+# Win11 Debloater & Optimizer
 
-![C#](https://img.shields.io/badge/C%23-12.0-purple?logo=csharp)
-![.NET](https://img.shields.io/badge/.NET-8.0-blue?logo=dotnet)
+![C#](https://img.shields.io/badge/C%23-12.0-512BD4?logo=csharp)
+![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)
 ![Windows](https://img.shields.io/badge/Windows-11-0078D6?logo=windows)
-![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
+![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-5391FE?logo=powershell)
 
-> 🛡️ Um utilitário desktop open-source para otimização, debloat e manutenção profunda do Windows 11, desenvolvido em C# com execução assíncrona de scripts PowerShell, interface minimalista e logs detalhados em tempo real.
+Aplicação desktop em **C#/.NET 8 + WinForms** para automatizar manutenção, debloat e ajustes do Windows 11 por meio de **PowerShell**, Registry, serviços, tarefas agendadas, AppX, DISM, SFC e `powercfg`.
 
-## ✨ Diferenciais
+O projeto centraliza operações de sistema em uma interface única, com execução assíncrona, logs em tempo real, confirmações para etapas destrutivas e tentativa de criação de ponto de restauração antes das alterações.
 
-- ⚡ **Execução assíncrona não-bloqueante** – A interface nunca trava, mesmo durante o DISM/SFC que podem levar até 30 minutos.
-- 🎨 **Interface minimalista estilo Windows 11** – Sidebar com cards informativos + console de log com cores semânticas.
-- 📊 **Logs detalhados em tempo real** – Cada ação mostra exatamente o que está sendo feito (registros alterados, serviços parados, apps removidos).
-- 🔐 **Confirmações inteligentes** – Tarefas perigosas (remoção de apps, limpeza profunda de updates) pedem confirmação antes de executar.
-- 🚀 **Dois modos de execução** – Pacote completo (com DISM/SFC e limpeza profunda) ou modo rápido (sem operações demoradas).
-- 🛡️ **Elevação UAC automática** – Solicita permissões de administrador automaticamente ao iniciar, garantindo acesso total ao sistema.
-- 🔄 **Ponto de restauração automático** – Cria backup seguro do registro e sistema antes de aplicar alterações.
-- 🧹 **Limpeza profunda de updates** – Remove componentes substituídos do Windows Update usando `DISM /StartComponentCleanup` e `/ResetBase`.
+## O que este projeto demonstra
 
-## 🎯 Público-Alvo
+- Integração entre **C# e PowerShell** usando `ProcessStartInfo`.
+- Execução assíncrona para reduzir bloqueios da interface em tarefas demoradas.
+- Captura separada de **stdout** e **stderr**.
+- Atualização thread-safe da interface a partir de processos externos.
+- Manipulação de **Registry** em `HKCU` e `HKLM`.
+- Controle de serviços e tarefas agendadas.
+- Remoção de pacotes AppX instalados e provisionados.
+- Uso de ferramentas nativas como **DISM**, **SFC**, `powercfg` e `cleanmgr`.
+- Elevação UAC via manifesto.
+- Confirmação adicional para operações de maior impacto.
+- Logs categorizados em tempo real.
 
-- 💻 **Usuários do Windows 11** que querem um sistema mais limpo, rápido, privado e sem anúncios nativos.
-- 🎮 **Gamers** que buscam otimizações de desempenho, ativação do Game Mode e remoção de bloatware em segundo plano.
-- 🔒 **Entusiastas de privacidade** que desejam desativar telemetria, rastreamento, Recall, Copilot e coleta de dados.
-- 🛠️ **Power users e técnicos** que precisam de uma ferramenta completa, portátil e de um clique para manutenção do sistema.
-- 👨‍💻 **Desenvolvedores** interessados em aprender sobre execução de PowerShell em C#, manipulação de registro e interfaces WinForms.
+## Fluxo técnico
 
-## 🚀 Como Usar
+```text
+WinForms UI
+    |
+    v
+OtimizacaoTask
+    |
+    v
+Ação C#
+    |
+    v
+RunPS()
+    |
+    +--> script PowerShell temporário
+    +--> powershell.exe
+    +--> stdout --------------+
+    +--> stderr --------------+--> TrataLinha() --> log da interface
+```
 
-### Opção 1: Executar o EXE
-1. Baixe o arquivo `Win11Debloater.exe` da pasta principal do repositório ou da seção [Releases](../../releases).
-2. Execute o arquivo (o Windows pedirá permissão de administrador automaticamente via UAC).
-3. Escolha uma otimização individual nos cards ou clique em **"⚡ Executar tudo"** / **"🚀 Sem DISM/SFC"**.
+Cada card da interface representa uma `OtimizacaoTask`, contendo nome, descrição, tempo estimado, ação assíncrona e, quando necessário, uma confirmação adicional.
 
-### Opção 2: Compilar do código-fonte
-1. Clone o repositório
-"git clone https://github.com/Lugarty/Win11-Debloater-Optimizer" e depois
-"cd Win11Debloater"
+## Modos de execução
 
-2. Execute em modo desenvolvimento
-"dotnet run"
+### Pacote completo
 
-3. Ou compile o executável único com o comando "dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ".
+Inclui:
 
-## 🛠️ Otimizações Incluídas
+- ponto de restauração;
+- privacidade e telemetria;
+- remoção seletiva de apps;
+- OneDrive, Copilot, Recall e Widgets;
+- serviços e tarefas agendadas;
+- desempenho e Game Mode;
+- limpeza de temporários;
+- limpeza do repositório de componentes;
+- `DISM /RestoreHealth`;
+- `sfc /scannow`.
 
-- 🔒 Privacidade & Telemetria
-- ✅ Desativa coleta de dados e serviços de rastreio (DiagTrack, dmwappushservice, WerSvc).
-- ✅ Remove ID de publicidade, histórico de atividades e sugestões de consumer features.
-- 🗑️ Debloat & Apps
-- ✅ Remove apps nativos inúteis (Bing News, Weather, Solitaire, Phone Link, Clipchamp, etc).
-- ✅ Desinstala OneDrive completamente e remove da inicialização.
-- ✅ Remove Widgets, Copilot e desativa análise de IA (Recall).
-- ⚙️ Interface & Sistema
-- ✅ Menu de contexto clássico (estilo Windows 10).
-- ✅ Busca do Menu Iniciar restrita a arquivos locais (sem sugestões do Bing).
-- ✅ Desativação de tarefas agendadas de telemetria e CEIP.
-- 🚀 Desempenho & Manutenção
-- ✅ Plano de energia Alto Desempenho, Game Mode e desativação de GameDVR.
-- ✅ Limpeza profunda de temporários, cache, Prefetch e Lixeira.
-- ✅ Limpeza do repositório de componentes do Windows Update (DISM /ResetBase).
-- ✅ Verificação e reparo de integridade do sistema (DISM /RestoreHealth + sfc /scannow).
+### Modo rápido
 
-## 📊 Logs Inteligentes
+Executa as etapas mais curtas e **não executa** a limpeza profunda de componentes, DISM e SFC.
 
-O sistema filtra automaticamente poluição visual (barras de progresso do DISM) e colore mensagens por categoria:
+## Segurança e reversibilidade
 
-- 🟢 **[OK]** / Sucessos
-- 🟡 **[AVISO]** / Permissões ignoradas
-- 🔴 **[ERRO]** / Falhas de execução
-- 🔵 **[REG]**, **[SVC]**, **[APP]**, **[TASK]** / Ações específicas
+O fluxo completo tenta:
 
-Tarefas destrutivas (remoção de apps, limpeza profunda) exigem confirmação do usuário antes de executar.
+1. habilitar a Restauração do Sistema na unidade `C:\`;
+2. criar um ponto chamado `Win11Debloater`.
 
-## ⚠️ Aviso Importante
-### Este utilitário faz alterações profundas no sistema Windows:
-- Modifica chaves de registro (HKLM e HKCU).
-- Remove aplicativos provisionados na imagem do sistema.
-- Desativa serviços nativos da Microsoft.
-- Executa comandos com privilégios elevados (TrustedInstaller / SYSTEM).
-- O aplicativo cria um Ponto de Restauração automaticamente na primeira etapa, mas é altamente recomendado que você faça seu próprio backup antes de usar. Use por sua conta e risco. O código é 100% open-source para que você possa auditar exatamente o que está sendo feito no seu PC.
+Operações de maior impacto pedem confirmação adicional. A etapa com `DISM /ResetBase`, por exemplo, alerta que pode impedir a desinstalação de atualizações antigas.
 
-## 📄 Licença
+> O ponto de restauração depende da configuração do próprio Windows e não substitui um backup dos dados.
 
-Este projeto é open-source e está disponível sob a licença **MIT**. Sinta-se livre para usar, modificar, forkar e distribuir. Consulte o arquivo [LICENSE](LICENSE) para obter mais detalhes.
+## Logs e diagnóstico
 
-## 👥 Desenvolvedor
+O executor captura a saída padrão e os erros do PowerShell e envia as linhas para a interface em tempo real.
 
-| Nome | Contato |
-|------|---------|
-| **Anisio Oliveira Albuquerque Filho** | anisioalbuquerque71@gmail.com |
+Categorias usadas:
+
+- `[OK]` — conclusão reportada pelo script;
+- `[AVISO]` — condição que exige atenção;
+- `[REG]` — Registry;
+- `[SVC]` — serviços;
+- `[TASK]` — tarefas agendadas;
+- `[APP]` — AppX;
+- `[FILE]` — arquivos/limpeza;
+- `[DISM]` / `[SFC]` — manutenção da imagem e arquivos do sistema.
+
+### Semântica do status
+
+O status visual **“Concluído”** indica que o fluxo da tarefa terminou sem uma exceção C# não tratada. Alguns comandos do Windows podem retornar avisos ou falhas parciais sem interromper todo o pacote; por isso, o log e o estado final do sistema devem ser validados em operações críticas.
+
+## Principais operações
+
+### Privacidade e telemetria
+- políticas de coleta de dados;
+- Advertising ID;
+- histórico de atividades;
+- sugestões e consumer features;
+- serviços como `DiagTrack`, `dmwappushservice` e `WerSvc`.
+
+### Apps e integração do sistema
+- remoção seletiva de AppX;
+- remoção de pacotes provisionados;
+- OneDrive;
+- Copilot, Recall e Widgets;
+- ajustes da busca e interface.
+
+### Manutenção
+- limpeza de temporários;
+- cache do Windows Update;
+- Delivery Optimization;
+- Lixeira;
+- `DISM /StartComponentCleanup`;
+- `DISM /ResetBase`;
+- `DISM /RestoreHealth`;
+- `sfc /scannow`.
+
+## Tecnologias
+
+| Área | Tecnologia |
+|---|---|
+| Linguagem | C# |
+| Runtime | .NET 8 |
+| UI | WinForms |
+| Automação | Windows PowerShell |
+| Sistema | Registry, Services, Scheduled Tasks, AppX |
+| Manutenção | DISM, SFC, cleanmgr, powercfg |
+
+## Como executar
+
+### Pré-requisitos
+
+- Windows 11;
+- privilégios de administrador;
+- .NET 8 SDK apenas se for compilar o projeto.
+
+### Pelo código-fonte
+
+```bash
+git clone https://github.com/Lugarty/Win11-Debloater-Optimizer.git
+cd Win11-Debloater-Optimizer
+dotnet run
+```
+
+### Publicar executável
+
+```bash
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+```
+
+## Limitações conhecidas
+
+- Algumas políticas variam entre edições e builds do Windows 11.
+- Vários cmdlets usam tratamento tolerante a erro para que uma etapa ausente em determinada máquina não interrompa o pacote inteiro.
+- O log deve ser consultado para identificar avisos e falhas parciais.
+- Alterações de Registry, serviços e componentes do Windows devem ser validadas antes de uso em máquinas de produção.
+
+## Roadmap
+
+- separar executor, regras de otimização e UI em camadas distintas;
+- diferenciar visualmente **sucesso**, **concluído com avisos** e **falha**;
+- validar códigos de saída de comandos externos de forma mais granular;
+- adicionar testes automatizados para componentes isoláveis do Windows;
+- ampliar documentação por versão/build do Windows.
+
+## Aviso
+
+Este utilitário altera configurações sensíveis do Windows, incluindo Registry, serviços, tarefas agendadas, aplicativos e componentes do sistema.
+
+Use somente se você entender as mudanças realizadas. Faça backup dos seus dados antes de executar operações destrutivas.
+
+## Licença
+
+Projeto disponibilizado sob licença MIT. Consulte [LICENSE](LICENSE).
+
+## Autor
+
+**Anísio Oliveira Albuquerque Filho**  
+GitHub: [@Lugarty](https://github.com/Lugarty)
