@@ -13,6 +13,13 @@ namespace Win11Debloater;
 
 public partial class Form1 : Form
 {
+    private enum TaskExecutionOutcome
+    {
+        Succeeded,
+        CompletedWithWarnings,
+        Failed
+    }
+
     private sealed class OtimizacaoTask
     {
         public string Nome = "";
@@ -29,6 +36,7 @@ public partial class Form1 : Form
 
     private readonly List<OtimizacaoTask> _tasks = new();
     private bool _executando = false;
+    private int _taskOutcome;
 
     private static readonly string PsHelpers = """
 $ProgressPreference = 'SilentlyContinue'
@@ -384,8 +392,13 @@ function Remove-AppxByName
 
         try
         {
-            await ExecutarTaskInterno(t);
-            lblStatus.Text = $"Concluído: {t.Nome}";
+            var outcome = await ExecutarTaskInterno(t);
+            lblStatus.Text = outcome switch
+            {
+                TaskExecutionOutcome.Failed => $"Falha: {t.Nome}. Consulte o log.",
+                TaskExecutionOutcome.CompletedWithWarnings => $"Concluído com avisos: {t.Nome}",
+                _ => $"Concluído: {t.Nome}"
+            };
         }
         finally
         {
@@ -441,11 +454,15 @@ function Remove-AppxByName
             Log("========================================", Color.FromArgb(255, 210, 90));
 
             int i = 0;
+            int failed = 0;
+            int warnings = 0;
+            int skipped = 0;
 
             foreach (var t in selected)
             {
                 if (!ConfirmarTarefaPerigosa(t))
                 {
+                    skipped++;
                     i++;
                     progressBar.Value = i;
                     Log($"Etapa ignorada pelo usuário: {t.Nome}.", Color.FromArgb(255, 190, 90));
@@ -453,7 +470,11 @@ function Remove-AppxByName
                     continue;
                 }
 
-                await ExecutarTaskInterno(t);
+                var outcome = await ExecutarTaskInterno(t);
+                if (outcome == TaskExecutionOutcome.Failed)
+                    failed++;
+                else if (outcome == TaskExecutionOutcome.CompletedWithWarnings)
+                    warnings++;
 
                 i++;
                 progressBar.Value = i;
@@ -461,14 +482,29 @@ function Remove-AppxByName
                 await Task.Delay(250);
             }
 
-            Log("🎉 Pacote finalizado.", Color.FromArgb(110, 220, 140));
-            Log("Recomenda-se reiniciar o computador.", Color.FromArgb(180, 180, 180));
-
-            lblStatus.Text = includeRepair
-                ? "Otimização completa. Reinicie o PC."
-                : "Otimização rápida concluída. Reinicie o PC.";
-
-            PerguntarReinicio();
+            if (failed > 0)
+            {
+                Log($"✗ Pacote finalizado com {failed} etapa(s) com falha, {warnings} com avisos e {skipped} ignorada(s). Consulte o log antes de decidir os próximos passos.", Color.FromArgb(255, 120, 120));
+                lblStatus.Text = $"{failed} etapa(s) falharam. Consulte o log.";
+            }
+            else if (warnings > 0 || skipped > 0)
+            {
+                Log($"⚠ Pacote finalizado com {warnings} etapa(s) com avisos e {skipped} ignorada(s). Consulte o log.", Color.FromArgb(255, 190, 90));
+                lblStatus.Text = includeRepair
+                    ? "Otimização concluída com avisos ou etapas ignoradas. Consulte o log."
+                    : "Otimização rápida concluída com avisos ou etapas ignoradas. Consulte o log.";
+                Log("Recomenda-se revisar o log antes de reiniciar.", Color.FromArgb(180, 180, 180));
+                PerguntarReinicio();
+            }
+            else
+            {
+                Log("🎉 Pacote finalizado com sucesso.", Color.FromArgb(110, 220, 140));
+                Log("Recomenda-se reiniciar o computador.", Color.FromArgb(180, 180, 180));
+                lblStatus.Text = includeRepair
+                    ? "Otimização completa. Reinicie o PC."
+                    : "Otimização rápida concluída. Reinicie o PC.";
+                PerguntarReinicio();
+            }
         }
         finally
         {
@@ -572,8 +608,9 @@ function Remove-AppxByName
         }
     }
 
-    private async Task ExecutarTaskInterno(OtimizacaoTask t)
+    private async Task<TaskExecutionOutcome> ExecutarTaskInterno(OtimizacaoTask t)
     {
+        System.Threading.Interlocked.Exchange(ref _taskOutcome, (int)TaskExecutionOutcome.Succeeded);
         t.StatusLabel.Text = "● Executando...";
         t.StatusLabel.ForeColor = Color.FromArgb(0, 103, 192);
         t.Card.BackColor = Color.FromArgb(234, 241, 250);
@@ -587,17 +624,40 @@ function Remove-AppxByName
         {
             await t.Acao();
 
-            t.StatusLabel.Text = "✓ Concluído";
-            t.StatusLabel.ForeColor = Color.FromArgb(20, 140, 60);
+            var outcome = (TaskExecutionOutcome)System.Threading.Interlocked.CompareExchange(
+                ref _taskOutcome,
+                (int)TaskExecutionOutcome.Succeeded,
+                (int)TaskExecutionOutcome.Succeeded);
 
-            Log($"✔ {t.Nome} concluído em {FormatTempo(sw)}.", Color.FromArgb(110, 220, 140));
+            if (outcome == TaskExecutionOutcome.Failed)
+            {
+                t.StatusLabel.Text = "✗ Falhou";
+                t.StatusLabel.ForeColor = Color.Crimson;
+                Log($"✗ {t.Nome} falhou após {FormatTempo(sw)}. Consulte as mensagens acima.", Color.FromArgb(255, 120, 120));
+            }
+            else if (outcome == TaskExecutionOutcome.CompletedWithWarnings)
+            {
+                t.StatusLabel.Text = "⚠ Concluído com avisos";
+                t.StatusLabel.ForeColor = Color.DarkOrange;
+                Log($"⚠ {t.Nome} terminou com avisos em {FormatTempo(sw)}.", Color.FromArgb(255, 190, 90));
+            }
+            else
+            {
+                t.StatusLabel.Text = "✓ Concluído";
+                t.StatusLabel.ForeColor = Color.FromArgb(20, 140, 60);
+                Log($"✔ {t.Nome} concluído em {FormatTempo(sw)}.", Color.FromArgb(110, 220, 140));
+            }
+
+            return outcome;
         }
         catch (Exception ex)
         {
+            RecordTaskOutcome(TaskExecutionOutcome.Failed);
             t.StatusLabel.Text = "✗ Erro";
             t.StatusLabel.ForeColor = Color.Crimson;
 
             Log($"✗ Erro em {t.Nome}: {ex.Message}", Color.FromArgb(255, 120, 120));
+            return TaskExecutionOutcome.Failed;
         }
         finally
         {
@@ -621,6 +681,19 @@ function Remove-AppxByName
             return $"{(int)sw.Elapsed.TotalMinutes}m {sw.Elapsed.Seconds}s";
 
         return $"{sw.Elapsed.TotalSeconds:0.#}s";
+    }
+
+    private void RecordTaskOutcome(TaskExecutionOutcome outcome)
+    {
+        int value = (int)outcome;
+        int current;
+        do
+        {
+            current = System.Threading.Volatile.Read(ref _taskOutcome);
+            if (current >= value)
+                return;
+        }
+        while (System.Threading.Interlocked.CompareExchange(ref _taskOutcome, value, current) != current);
     }
 
     #region Ações
@@ -993,7 +1066,8 @@ Write-Output "[OK] SFC concluído."
             "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8\r\n" +
             "$OutputEncoding=[System.Text.Encoding]::UTF8\r\n" +
             "$ErrorActionPreference='Continue'\r\n" +
-            PsHelpers + "\r\n" + script;
+            PsHelpers + "\r\n" + script + "\r\n" +
+            "if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }\r\n";
 
         File.WriteAllText(tempFile, fullScript, new UTF8Encoding(true));
 
@@ -1037,12 +1111,21 @@ Write-Output "[OK] SFC concluído."
         await proc.WaitForExitAsync().ConfigureAwait(false);
         await Task.WhenAll(outputCompleted.Task, errorCompleted.Task).ConfigureAwait(false);
 
+        if (proc.ExitCode != 0)
+        {
+            RecordTaskOutcome(TaskExecutionOutcome.Failed);
+            Log($"   O PowerShell terminou com o código {proc.ExitCode}.", Color.FromArgb(255, 120, 120));
+        }
+
         try { File.Delete(tempFile); } catch { }
     }
 
     private void TrataLinha(string? linha, bool erro)
     {
         if (string.IsNullOrWhiteSpace(linha)) return;
+
+        if (erro || linha.Contains("[AVISO]"))
+            RecordTaskOutcome(TaskExecutionOutcome.CompletedWithWarnings);
 
         // Remove barras de progresso do DISM: [==== 63.4% ====]
         if (Regex.IsMatch(linha, @"^\s*\[[=\s\d\.\%]+\]\s*$")) return;
