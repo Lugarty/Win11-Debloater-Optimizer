@@ -52,12 +52,12 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 The application can modify the Registry, services, scheduled tasks, installed applications, and Windows components. Review each operation before confirming it. The app attempts to enable System Restore and create a restore point, but this is best-effort and does not replace a backup. Review the logs and verify the resulting system state after important operations.
 
-The visual `Completed` status means the task flow ended without an unhandled C# exception. A Windows command can still report a warning or partial failure, so consult the detailed log.
+Each task reports success, completion with warnings, or failure. Non-zero PowerShell process exit codes and unhandled C# exceptions are reported as failures; PowerShell error output and explicit `[AVISO]` messages are reported as warnings. Review the detailed log after any warning because some commands can complete only part of their work.
 
 ## Current Limitations
 
 - Behavior may vary across Windows 11 editions and builds.
-- Some commands tolerate missing components and may complete with warnings.
+- Some commands tolerate missing components, and PowerShell error output may be non-terminating; review warning details in the log.
 - No automated test suite or GitHub Actions workflow is currently included.
 
 ## License
